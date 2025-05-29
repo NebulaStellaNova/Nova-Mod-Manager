@@ -1,0 +1,297 @@
+import StringTools;
+
+import haxe.ui.RuntimeComponentBuilder;
+import flixel.FlxG;
+import haxe.ui.backend.flixel.UIState;
+import flixel.util.FlxSave;
+import flixel.FlxSprite;
+import haxe.Json;
+import funkin.graphics.FunkinSprite;
+
+import haxe.ui.core.Component;
+import haxe.ui.core.TextDisplay;
+
+import haxe.ui.components.Label;
+import haxe.ui.components.Button;
+import haxe.ui.components.TabBar;
+import haxe.ui.components.Column;
+import haxe.ui.components.TextArea;
+import haxe.ui.components.CheckBox;
+import haxe.ui.components.TextField;
+import haxe.ui.components.NumberStepper;
+
+import haxe.ui.containers.dialogs.Dialog;
+import haxe.ui.containers.Box;
+import haxe.ui.containers.HBox;
+import haxe.ui.containers.Header;
+import haxe.ui.containers.TabView;
+import haxe.ui.containers.ListView;
+import haxe.ui.containers.TableView;
+import haxe.ui.containers.menus.Menu;
+import haxe.ui.containers.menus.MenuBar;
+import haxe.ui.containers.windows.Window;
+import haxe.ui.containers.menus.MenuItem;
+import haxe.ui.containers.menus.MenuCheckBox;
+import haxe.ui.containers.menus.MenuOptionBox;
+import haxe.ui.containers.menus.MenuSeparator;
+import haxe.ui.containers.windows.WindowManager;
+import flixel.text.FlxText;
+
+import funkin.ui.MusicBeatState;
+
+import haxe.ui.data.ArrayDataSource;
+
+import haxe.ui.macros.ComponentMacros;
+
+import openfl.net.URLLoader;
+import openfl.net.URLRequest;
+import openfl.net.FileReference;
+import openfl.display.BitmapData;
+import funkin.util.FileUtil;
+import funkin.util.ReflectUtil;
+import haxe.io.Bytes;
+import Std;
+
+import funkin.ui.debug.charting.ChartEditorState;
+
+import funkin.input.Cursor;
+
+import funkin.modding.module.ModuleHandler;
+
+import funkin.modding.PolymodHandler;
+
+import funkin.modding.module.Module;
+
+//import haxe.Http;
+
+class ModManagerState extends MusicBeatState {
+
+    var currentFolder = "???";
+
+    // UI Stuff \\
+    var loadingCircle;
+
+    // -------- \\
+
+    var save = new FlxSave();
+
+    var curPage = 1;
+    var curType = "Mod";
+    var curOrder = "default"; // newest 
+
+    var verifiedIDs;
+
+    function new() {
+        super('ModManagerState');
+    }
+
+    public function parseJsonString(str:String) {
+		return Json.parse(str);
+	}
+
+	public function parseJsonFile(path:String) {
+		var daString = FileUtil.readStringFromPath(path);
+		if (daString == null || daString == "") {
+			return null;
+		} else {
+			return parseJsonString(daString);
+		}
+	}
+
+    function getBestOfTitle(category) {
+        switch (category) {
+            case "today":
+                return "Best of Today";
+        }
+    }
+
+    function loadImageFromWeb(url) {
+        /* var loader = new URLLoader();
+        loader.dataFormat = 0;
+        loader.addEventListener("complete", ()->{
+            var bitmap:BitmapData = BitmapData.fromBytes(loader.data);
+            var sprite:FunkinSprite = new FunkinSprite().loadBitmapData(bitmap);
+            sprite.setGraphicSize(FlxG.width/gridWidth, FlxG.height/gridWidth);
+            if (globalIndex % gridWidth == 0) {
+                yIndex++;
+            }
+            sprite.x = ((FlxG.width/gridWidth)*globalIndex) - (FlxG.width*yIndex);
+            sprite.y = (FlxG.height/gridWidth) * yIndex + (15 * yIndex);
+            sprite.updateHitbox();
+            //loadedSprites.push(sprite);
+            add(sprite);
+
+            var title = new FlxText();
+            title.text = titles[globalIndex];
+            title.x = sprite.x;
+            title.y = sprite.y + sprite.height;
+            add(title);
+            globalIndex++;
+            //trace(loader.data);
+            //FileUtil.writeBytesToPath(".temp/test.png", loader.data);
+        });
+        //var reference = new FileReference();
+        //var url = "https://github.com/NebulaStellaNova/Nova-Mod-Manager/blob/main/whittyFront.png?raw=true";
+        loader.load(new URLRequest(url)); */
+    }
+
+    function loadMods() {
+        var url = "https://gamebanana.com/apiv11/Game/8694/Subfeed?_nPage=" + curPage + "&_csvModelInclusions=" + curType + "&_sOrder=" + curOrder + "";
+        var loader = new URLLoader();
+        loader.addEventListener("complete", ()->{
+            var jsonFile = Json.parse(loader.data);
+            for (i in jsonFile._aRecords) {
+                /*var mod = {
+                    //:
+                }*/
+                var ind = 0;
+                for (image in i._aPreviewMedia._aImages) {
+                    if (ind == 0) {
+                        image._sBaseUrl = StringTools.replace(image._sBaseUrl, "\\", "");
+                        loadImageFromWeb(image._sBaseUrl + "/" + image._sFile);
+                    }
+                    ind++;
+                }
+                titles.push(i._sName); 
+                globalIndexText++;
+                trace(i._sName);
+            } 
+        });
+        loader.load(new URLRequest(url));
+    }
+
+    function makeRequest(url, onComplete) { // Won't work I suppose, need loader to get data.
+        var loader = new URLLoader();
+        loader.addEventListener("complete", onComplete);
+        loader.load(new URLRequest(url));
+    }
+
+    var bestOfToday = [];
+
+    function getBestOf() {
+        var url = "https://gamebanana.com/apiv11/Game/8694/TopSubs";
+        var loader = new URLLoader();
+        loader.addEventListener("complete", ()->{
+            var data = parseJsonString(loader.data);
+            for (mod in data) {
+                if (mod._sPeriod == "today") {
+                    bestOfToday.push(mod);
+                }
+            }
+            // data = loader.data
+        });
+        loader.load(new URLRequest(url));
+    }
+
+    function makeRequest(url, onComplete) {
+        var loader = new URLLoader();
+        loader.addEventListener("complete", ()->{
+            onComplete(loader);
+        });
+        loader.load(new URLRequest(url));
+    }
+
+    function create() {
+        super.create();
+		Cursor.show();
+
+        //NListUtil = new Module("NListUtil");
+        //trace(NListUtil);
+
+        for (mod in PolymodHandler.getAllMods()) {
+			var meta = parseJsonFile("mods/" + mod.id + "/_polymod_meta.json");
+			if (meta.title == "Nova Mod Downloader") {
+				currentFolder = "mods/" + mod.id;
+				break;
+			}
+		}
+
+        verifiedIDs = parseNListFile(currentFolder + "/data/verified-ids");
+
+        var chartEditor = new ChartEditorState(); // To Fix UI Font.
+
+        /*makeRequest("https://gamebanana.com/apiv11/Game/8694/Subfeed?_nPage=1&_csvModelInclusions=Mod", (event)->{
+            trace(event.data);
+        });*/
+        /*makeRequest("https://github.com/NebulaStellaNova/Nova-Mod-Manager/blob/main/whittyFront.png?raw=true", (event)->{
+            trace(event.data);
+        });*/
+
+        /* var loader = new URLLoader();
+        loader.dataFormat = 0;
+        loader.addEventListener("complete", ()->{
+            //var bitmap:BitmapData = BitmapData.fromBytes(loader.data);
+            //var sprite:FunkinSprite = new FunkinSprite(10, 10).loadBitmapData(bitmap);
+            //add(sprite);
+            //trace(loader.data);
+            //FileUtil.writeBytesToPath(".temp/test.png", loader.data);
+        });
+        //var reference = new FileReference();
+        var url = "https://github.com/NebulaStellaNova/Nova-Mod-Manager/blob/main/whittyFront.png?raw=true"; */
+        //loader.load(new URLRequest(url));
+
+        //loadMods();
+
+        FlxG.camera.bgColor = 0xFF2B2C2E;
+
+        // UI Stuff \\
+        var topBar = new MenuBar();
+		topBar.width = FlxG.width;
+		//topBar.height = 50;
+		add(topBar);
+
+        var fileMenu = new Menu();
+		fileMenu.text = "File";
+        topBar.addComponent(fileMenu);
+
+        var gamebananaLogo = new FunkinSprite().loadGraphic(Paths.image("ui/gamebanana"));
+        gamebananaLogo.scale.set(0.8, 0.8);
+        gamebananaLogo.updateHitbox();
+        gamebananaLogo.screenCenter();
+        gamebananaLogo.y = 6;
+        add(gamebananaLogo);
+
+        loadingCircle = new FunkinSprite().loadGraphic(Paths.image("ui/loadingCircle"));
+        loadingCircle.scale.set(0.5, 0.5);
+        loadingCircle.updateHitbox();
+        loadingCircle.screenCenter();
+        loadingCircle.y += 25;
+        add(loadingCircle);
+
+        getBestOf();
+
+        FlxG.sound.music.stop();
+    }
+
+    function update(elapsed) {
+        super.update(elapsed);
+        /* var index = 0;
+        for (sprite in loadedSprites) {
+            sprite.setGraphicSize(FlxG.width/5, FlxG.height/5);
+            sprite.x = (FlxG.width/5)*index; 
+            index++;
+        } */
+
+        if (loadingCircle != null) {
+            loadingCircle.angle += (10 * elapsed) * 100;
+        }
+    }
+
+    function destroy() {
+        super.destroy();
+        Cursor.hide();
+    }
+
+    function parseNListFile(path) {
+        var nListFile = FileUtil.readStringFromPath(path + ".nList");
+        var finalLines = [];
+        var lines = nListFile.split("\n");
+        for (i in lines) {
+            if (!StringTools.startsWith(i, "//")) {
+                finalLines.push(i);
+            }
+        }
+        return finalLines;
+    }
+
+}

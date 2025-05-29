@@ -1,0 +1,65 @@
+import flixel.FlxG;
+import StringTools;
+import flixel.FlxSprite;
+import flixel.math.FlxBasePoint;
+import flixel.tweens.FlxEase;
+import flixel.tweens.FlxTween;
+import flixel.util.FlxTimer;
+import funkin.audio.FunkinSound;
+import funkin.Conductor;
+import funkin.play.notes.Strumline;
+import funkin.graphics.adobeanimate.FlxAtlasSprite;
+import funkin.graphics.FunkinSprite;
+import funkin.modding.base.ScriptedFlxAtlasSprite;
+import funkin.play.cutscene.CutsceneType;
+import funkin.play.cutscene.VideoCutscene;
+import funkin.play.GameOverSubState;
+import funkin.play.PlayState;
+import funkin.play.PlayStatePlaylist;
+import funkin.play.song.Song;
+import funkin.play.stage.StageProp;
+import funkin.save.Save;
+import funkin.util.ReflectUtil;
+
+import flixel.text.FlxText;
+import flixel.math.FlxPoint;
+import haxe.ui.components.Button;
+
+import funkin.play.character.BaseCharacter;
+import funkin.play.character.SparrowCharacter;
+import funkin.play.character.MultiSparrowCharacter;
+import funkin.modding.module.Module;
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.base.ScriptedMusicBeatState;
+import funkin.input.Cursor;
+
+class MainMenuButton extends Module {
+
+    function new() {
+        super("main-menu-button");
+    }
+
+    var currentState = "";
+
+    function onStateChangeEnd() {
+        super.onStateChangeEnd();
+        var daThing = ReflectUtil.getClassNameOf(FlxG.state).split(".");
+        //trace(daThing[daThing.length - 1]);
+        currentState = daThing[daThing.length - 1];
+        if (daThing[daThing.length - 1] == "MainMenuState") {
+            FlxG.state.leftWatermarkText.text += "\nPress [F10] To Open Mod Downloader";
+            FlxG.state.leftWatermarkText.y -= 15;
+        }
+    }
+
+    function onUpdate(event) {
+        super.onUpdate(event);
+
+        if (currentState == "MainMenuState") {
+            if (FlxG.keys.justPressed.F10) {
+                FlxG.switchState(ScriptedMusicBeatState.init('ModManagerState'));
+            }
+        }
+    }
+
+}
