@@ -2,6 +2,7 @@ import StringTools;
 
 import haxe.ui.RuntimeComponentBuilder;
 import flixel.FlxG;
+import flixel.text.FlxTextBorderStyle;
 import haxe.ui.backend.flixel.UIState;
 import flixel.util.FlxSave;
 import flixel.FlxSprite;
@@ -11,7 +12,9 @@ import funkin.graphics.FunkinSprite;
 import haxe.ui.core.Component;
 import haxe.ui.core.TextDisplay;
 
+import haxe.ui.components.Link;
 import haxe.ui.components.Label;
+import haxe.ui.components.Image;
 import haxe.ui.components.Button;
 import haxe.ui.components.TabBar;
 import haxe.ui.components.Column;
@@ -20,7 +23,6 @@ import haxe.ui.components.CheckBox;
 import haxe.ui.components.TextField;
 import haxe.ui.components.NumberStepper;
 
-import haxe.ui.containers.dialogs.Dialog;
 import haxe.ui.containers.Box;
 import haxe.ui.containers.HBox;
 import haxe.ui.containers.Header;
@@ -29,6 +31,7 @@ import haxe.ui.containers.ListView;
 import haxe.ui.containers.TableView;
 import haxe.ui.containers.menus.Menu;
 import haxe.ui.containers.menus.MenuBar;
+import haxe.ui.containers.dialogs.Dialog;
 import haxe.ui.containers.windows.Window;
 import haxe.ui.containers.menus.MenuItem;
 import haxe.ui.containers.menus.MenuCheckBox;
@@ -62,9 +65,16 @@ import funkin.modding.PolymodHandler;
 
 import funkin.modding.module.Module;
 
+import funkin.modding.base.ScriptedFlxRuntimeShader;
+import funkin.audio.FunkinSound;
+
 //import haxe.Http;
 
 class ModManagerState extends MusicBeatState {
+
+    var loader = new URLLoader(); // May be able to get download progress?
+
+    var roundCornerShader;
 
     var currentFolder = "???";
 
@@ -84,6 +94,10 @@ class ModManagerState extends MusicBeatState {
     function new() {
         super('ModManagerState');
     }
+
+	function openSound() {
+		FunkinSound.playOnce(Paths.sound("chartingSounds/openWindow"), 1);
+	}
 
     public function parseJsonString(str:String) {
 		return Json.parse(str);
@@ -154,7 +168,7 @@ class ModManagerState extends MusicBeatState {
                 }
                 titles.push(i._sName); 
                 globalIndexText++;
-                trace(i._sName);
+                //trace(i._sName);
             } 
         });
         loader.load(new URLRequest(url));
@@ -167,8 +181,17 @@ class ModManagerState extends MusicBeatState {
     }
 
     var bestOfToday = [];
+    var bestOfTodayObjs = [];
 
     function getBestOf() {
+
+        var versionTxt = new FlxText(10, 50);
+        versionTxt.text = "Best of Today";
+        versionTxt.setFormat(Paths.font('Tardling v1.1.ttf'));
+        versionTxt.size = 30;
+        versionTxt.antialiasing = true;
+        add(versionTxt);
+
         var url = "https://gamebanana.com/apiv11/Game/8694/TopSubs";
         var loader = new URLLoader();
         loader.addEventListener("complete", ()->{
@@ -178,9 +201,55 @@ class ModManagerState extends MusicBeatState {
                     bestOfToday.push(mod);
                 }
             }
+            //trace(bestOfToday);
+            addBestOfToday();
             // data = loader.data
         });
         loader.load(new URLRequest(url));
+    }
+
+    var bestIndex = 0;
+    function addBestOfToday() {
+        if (bestIndex > bestOfToday.length - 1) { 
+            loadingCircle.visible = false;    
+            return; 
+        }
+        var i = bestOfToday[bestIndex];
+        loader = new URLLoader();
+        loader.dataFormat = 0;
+        loader.addEventListener("complete", ()->{
+            var curBest = bestOfToday[bestIndex];
+            var bitmap:BitmapData = BitmapData.fromBytes(loader.data);
+            var sprite:FunkinSprite = new FunkinSprite().loadBitmapData(bitmap);
+
+            var modTitle = new FlxText(0, 0, (FlxG.width/3)*2);
+            modTitle.text = curBest._sName + "\n(" + curBest._aRootCategory._sName + ")";
+            modTitle.setFormat(Paths.font('Tardling-Solid.ttf'));
+            modTitle.size = 20*2;
+            modTitle.scale.set(0.5, 0.5);
+            modTitle.antialiasing = true;
+            modTitle.borderColor = 0xFF000000;
+            modTitle.borderSize = 5;
+            modTitle.borderStyle = FlxTextBorderStyle.OUTLINE;
+            modTitle.updateHitbox();
+            
+            //add(sprite);
+            bestOfTodayObjs.push({
+                // Strings \\
+                id: curBest._idRow,
+                type: curBest._sModelName,
+                submitterID: curBest._aSubmitter._idRow,
+                description: curBest._sDescription,
+                likes: curBest._nLikeCount,
+                category: curBest._aRootCategory._sName,
+                // Objects \\
+                title: modTitle,
+                thumbnail: sprite
+            });
+            bestIndex++;
+            addBestOfToday();
+        });
+        loader.load(new URLRequest(i._sImageUrl));
     }
 
     function makeRequest(url, onComplete) {
@@ -195,6 +264,8 @@ class ModManagerState extends MusicBeatState {
         super.create();
 		Cursor.show();
 
+        roundCornerShader =  new ScriptedFlxRuntimeShader(Assets.getText(Paths.frag("RoundEdge")));
+        roundCornerShader.data.iTime.value = 1000;
         //NListUtil = new Module("NListUtil");
         //trace(NListUtil);
 
@@ -249,6 +320,7 @@ class ModManagerState extends MusicBeatState {
         gamebananaLogo.updateHitbox();
         gamebananaLogo.screenCenter();
         gamebananaLogo.y = 6;
+        gamebananaLogo.color = 0xFFFF00FF;
         add(gamebananaLogo);
 
         loadingCircle = new FunkinSprite().loadGraphic(Paths.image("ui/loadingCircle"));
@@ -263,6 +335,139 @@ class ModManagerState extends MusicBeatState {
         FlxG.sound.music.stop();
     }
 
+    function format(text) {
+        text = StringTools.replace(text, "<br>", "\n");
+        text = StringTools.replace(text, "&amp;", "&");
+        text = StringTools.replace(text, " SelectedElement", "");
+        text = StringTools.replace(text, "<span class=\"BlueColor\">", "<font color='#6CB1E1'>");
+        text = StringTools.replace(text, "<span class=\"GreenDarkColor\">", "<font color='#344734'>");
+        text = StringTools.replace(text, "<span class=\"GreenColor\">", "<font color='#6EE16C'>");
+        text = StringTools.replace(text, "<span class=\"RedColor\">", "<font color='#FF4E4E'>");
+        text = StringTools.replace(text, "</span>", "</font>");
+        return text;
+    }
+
+    var windowManager = new WindowManager();
+
+    var infoWindow;
+    function openInfoWindow(data) {
+        infoWindow = new Window();
+        infoWindow.maximizable = false;
+        infoWindow.minimizable = false;
+        infoWindow.collapsable = false;
+        infoWindow.draggable = true;
+        infoWindow.windowManager = windowManager;
+        infoWindow.width = 1000;
+        infoWindow.height = 700;
+        infoWindow.title = data.name;
+        add(infoWindow);
+
+        var subDesc = new Label();
+        subDesc.text = format(data.description);//data.description;
+        subDesc.width = 980;
+        subDesc.fontSize = 10;
+        infoWindow.addComponent(subDesc);
+
+        var description = new Label();
+        description.text = format(data.text);//data.description;
+        description.width = 980;
+        infoWindow.addComponent(description);
+        
+        infoWindow.screenCenter();
+
+        openSound();
+    }
+
+    var cachedInfo = [
+        "INIT" => "Nothing"
+    ];
+    var curViewingID;
+
+    function moreInfo(id) {
+        curViewingID = id;
+        if (cachedInfo.exists()) {
+            openInfoWindow(cachedInfo[id]);
+        }
+        var curSelection;
+        for (i in bestOfTodayObjs) {
+            if (i.id == id) {
+                curSelection = i;
+            }
+        }
+        loader = new URLLoader();
+        loader.dataFormat = 0;
+        loader.addEventListener("complete", ()->{
+            var data = Json.parse(loader.data);
+            cachedInfo.set(curViewingID, data);
+            openInfoWindow(data);
+            //trace(data);
+        });
+        var url = "https://api.gamebanana.com/Core/Item/Data?itemtype=" + curSelection.type + "&itemid=" + id + "&return_object=true&fields=";
+        var fields = [
+            "authors",
+            "Category().name",
+            "catid",
+            "contestid",
+            "creator",
+            "Credits().aAuthors()",
+            "Credits().aAuthorsAndGroups()",
+            "Credits().ssvAuthorNames()",
+            "date",
+            "description",
+            "downloads",
+            "feedback_instructions",
+            "Files().aFiles()",
+            "Game().name",
+            "install_instructions",
+            "is_obsolete",
+            "lastpost_date",
+            "lastpost_userid",
+            "likes",
+            "mdate",
+            "modnote",
+            "name",
+            "Nsfw().bIsNsfw()",
+            "obsol_notice",
+            "Owner().name",
+            "postcount",
+            "Posts().LastPost().idPosterRow()",
+            "Posts().LastPost().sText()",
+            "Posts().LastPost().tsDateAdded()",
+            "Posts().Postcount().nPostCount()",
+            "Preview().sStructuredDataFullsizeUrl()",
+            "Preview().sSubFeedImageUrl()",
+            "RootCategory().id",
+            "RootCategory().name",
+            "screenshots",
+            "studioid",
+            "text",
+            "Trash().bIsTrashed()",
+            "udate",
+            "Updates().aGetLatestUpdates()",
+            "Updates().aLatestUpdates()",
+            "Updates().bSubmissionHasUpdates()",
+            "Updates().nUpdatesCount()",
+            "Url().sDownloadUrl()",
+            "Url().sEditUrl()",
+            "Url().sEmbeddablesUrl()",
+            "Url().sHistoryUrl()",
+            "Url().sProfileUrl()",
+            "Url().sTrashUrl()",
+            "Url().sUntrashUrl()",
+            "Url().sUpdatesUrl()",
+            "Url().sWithholdUrl()",
+            "userid",
+            "views",
+            "Withhold().bIsWithheld()"
+        ];
+        url += fields.join(',');
+        loader.load(new URLRequest(url));
+    }
+
+    function test(id) {
+        trace(id);
+    }
+
     function update(elapsed) {
         super.update(elapsed);
         /* var index = 0;
@@ -271,6 +476,84 @@ class ModManagerState extends MusicBeatState {
             sprite.x = (FlxG.width/5)*index; 
             index++;
         } */
+        for (i in bestOfTodayObjs) {
+            var index = bestOfTodayObjs.indexOf(i);
+            var daSprite = i.thumbnail;
+            var daTitle = i.title;
+            var padding = 20;
+            var daWidth = (FlxG.width/3)-padding;
+            daSprite.setGraphicSize(daWidth, (FlxG.height/3)-padding);
+            daSprite.updateHitbox();
+            daSprite.x = (daWidth + 10) * index; 
+            daSprite.x += 20;
+            daSprite.y = 100;
+            if (!members.contains(daSprite)) {
+                add(daSprite);
+            }
+            daTitle.x = daSprite.x;
+            daTitle.y = daSprite.y + daSprite.height + 5;
+            if (!members.contains(daTitle)) {
+                add(daTitle);
+                var buttonBox = new HBox();
+                buttonBox.x = daTitle.x;
+                buttonBox.y = daTitle.y + (daTitle.frameHeight/2);
+
+                var downloadButton = new Button();
+                downloadButton.height = 25;
+                downloadButton.text = "   Download";
+                var downloadSprite = new FunkinSprite(12, 6).loadGraphic(Paths.image("ui/downloadIcon"));
+                downloadSprite.setGraphicSize(12, 12);
+                downloadSprite.updateHitbox();
+                downloadButton.add(downloadSprite);
+                downloadButton.onClick = ()->test(bestOfTodayObjs[index].id);
+                buttonBox.addComponent(downloadButton);
+                add(buttonBox);
+                
+                var infoButton = new Button();
+                infoButton.text = "   More Info";
+                infoButton.onClick = ()->moreInfo(bestOfTodayObjs[index].id);
+
+                var infoSprite = new FunkinSprite(12, 6).loadGraphic(Paths.image("ui/info"));
+                infoSprite.setGraphicSize(14, 14);
+                infoSprite.updateHitbox();
+                infoButton.add(infoSprite);
+
+                buttonBox.addComponent(infoButton);
+                add(buttonBox);
+
+                if (StringTools.contains(verifiedIDs.toString(), i.id)) {
+                    var verifiedButton = new Button();
+                    verifiedButton.text = "   Verified";
+                    verifiedButton.onClick = ()->{
+                        var verifiedWindow = new Window();
+                        verifiedWindow.maximizable = false;
+                        verifiedWindow.minimizable = false;
+                        verifiedWindow.collapsable = false;
+                        verifiedWindow.draggable = true;
+                        verifiedWindow.windowManager = windowManager;
+                        verifiedWindow.title = "Verified!";
+                        verifiedWindow.width = 200;
+                        verifiedWindow.height = 100;
+                        verifiedWindow.screenCenter();
+                        
+                        var label = new Label();
+                        label.text = "Verified V-Slice Mod";
+                        verifiedWindow.addComponent(label);
+                        add(verifiedWindow);
+
+                        openSound();
+                    };
+    
+                    var verifiedSprite = new FunkinSprite(12, 6).loadGraphic(Paths.image("ui/verified"));
+                    verifiedSprite.setGraphicSize(14, 14);
+                    verifiedSprite.updateHitbox();
+                    verifiedButton.add(verifiedSprite);
+    
+                    buttonBox.addComponent(verifiedButton);
+                    add(buttonBox);
+                }
+            }
+        }
 
         if (loadingCircle != null) {
             loadingCircle.angle += (10 * elapsed) * 100;
