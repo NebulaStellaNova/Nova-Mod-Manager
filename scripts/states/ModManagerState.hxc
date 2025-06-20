@@ -271,7 +271,7 @@ class ModManagerState extends MusicBeatState {
 
         for (mod in PolymodHandler.getAllMods()) {
 			var meta = parseJsonFile("mods/" + mod.id + "/_polymod_meta.json");
-			if (meta.title == "Nova Mod Downloader") {
+			if (meta.title == "Nova Gamebanana Browser") {
 				currentFolder = "mods/" + mod.id;
 				break;
 			}
